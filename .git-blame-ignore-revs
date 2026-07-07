@@ -40,3 +40,6 @@ a490c0498c680f8fdab2c4d483f0a335210e2311
 
 # treewide: cargo fmt
 779a2869583bc35592ec965daa7e6f56f6a00e2a
+
+# treewide: run nix fmt
+4de1f38bb444cfd760a5c15ce347764c3141168b
