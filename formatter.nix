@@ -1,42 +1,56 @@
 {
   lib,
+  stdenv,
   writeShellScriptBin,
   cargo,
+  clippy,
   deno,
   editorconfig-checker,
+  git,
   nixfmt-tree,
   ruff,
+  rustc,
+  rustfmt,
   taplo,
 }:
 
 writeShellScriptBin "formatter" ''
+  export PATH="${
+    lib.makeBinPath [
+      cargo
+      clippy
+      deno
+      editorconfig-checker
+      git
+      nixfmt-tree
+      ruff
+      rustc
+      rustfmt
+      stdenv.cc
+      taplo
+    ]
+  }"
+
   set -eoux pipefail
   shopt -s globstar
 
-  root="$PWD"
-  while [[ ! -f "$root/.git/index" ]]; do
-    if [[ "$root" == "/" ]]; then
-      exit 1
-    fi
-    root="$(dirname "$root")"
-  done
-  pushd "$root" > /dev/null
+  pushd "$(git rev-parse --show-toplevel)" > /dev/null
 
   # disable this for now
-  # ${lib.getExe deno} fmt **/*.md **/*.{yml,yaml} **/*.js
+  # deno fmt **/*.md **/*.{yml,yaml} **/*.js
 
   # also disabled for now (produce too maybe diffs)
-  # ${lib.getExe ruff} check --fix --unsafe-fixes --preview .
+  # ruff check --fix --unsafe-fixes --preview .
 
-  ${lib.getExe nixfmt-tree} .
+  treefmt .
 
-  ${lib.getExe taplo} format **/*.toml
+  taplo format **/*.toml
 
-  ${lib.getExe cargo} clippy --all-targets --all-features --fix --allow-dirty -- -D warnings
-  ${lib.getExe cargo} fmt --all
+  cargo-clippy --all-targets --all-features --fix --allow-dirty -- -D warnings
+  cargo-fmt --all
 
   # must run last
-  ${lib.getExe editorconfig-checker}
+  editorconfig-checker
 
   popd
 ''
