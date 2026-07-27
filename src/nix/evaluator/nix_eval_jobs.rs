@@ -77,10 +77,18 @@ impl DrvSetEvaluator for NixEvalJobs {
         flags: NixFlags,
     ) -> ColmenaResult<Pin<Box<dyn Stream<Item = EvalResult>>>> {
         let mut command = Command::new(&self.executable);
-        command
-            .arg("--workers")
-            .arg(self.workers.to_string())
-            .args(["--expr", &expression.expression()]);
+        command.arg("--workers").arg(self.workers.to_string());
+
+        if let Some(installable) = expression.installable() {
+            command.args([
+                "--flake",
+                &installable,
+                "--select",
+                &expression.expression(),
+            ]);
+        } else {
+            command.args(["--expr", &expression.expression()]);
+        }
 
         command.args(flags.to_args());
 
@@ -190,7 +198,11 @@ impl From<EvalLineDerivation> for AttributeOutput {
 impl From<EvalLineAttributeError> for AttributeError {
     fn from(ele: EvalLineAttributeError) -> Self {
         Self {
-            attribute: ele.attribute,
+            // nix-eval-jobs adds surrounding quotes for attribute names
+            // with dots:
+            //
+            // <https://github.com/nix-community/nix-eval-jobs/commit/61c9f4cf>
+            attribute: ele.attribute.trim_matches('"').to_string(),
             error: ele.error,
         }
     }
@@ -278,8 +290,8 @@ mod tests {
     #[timeout(30000)]
     fn test_attribute_error() {
         let evaluator = NixEvalJobs::default();
-        let expr =
-            r#"with import <nixpkgs> {}; { a = pkgs.hello; b = throw "an error"; }"#.to_string();
+        let expr = r#"with import <nixpkgs> {}; { a = pkgs.hello; "b.c" = throw "an error"; }"#
+            .to_string();
 
         block_on(async move {
             let mut stream = evaluator
@@ -297,7 +309,7 @@ mod tests {
                     }
                     Err(e) => match e {
                         EvalError::Attribute(a) => {
-                            assert_eq!("b", a.attribute);
+                            assert_eq!("b.c", a.attribute);
                         }
                         _ => {
                             panic!("Expected an attribute error, got {:?}", e);
